@@ -14,11 +14,6 @@ class XvaSolver(object):
         self.net_config = config.net_config
         self.bsde = bsde
 
-        # try:
-        #     self.isXVA = bsde.isXVA
-        # except AttributeError:
-        #     self.isXVA = False
-        #self.isXVA = True
         self.model = NonsharedModel(config, bsde)
         #self.y_init = self.model.y_init
 
@@ -51,22 +46,14 @@ class XvaSolver(object):
         return np.array(training_history)
 
     def loss_fn(self, inputs, training):
-        #if self.isXVA:
+        
         dw, x, v_clean, coll = inputs
         y_terminal = self.model(inputs, training)
         delta = y_terminal - self.bsde.g_tf(self.bsde.total_time, x[:, :, -1],v_clean[:,:,-1], coll[:,:,-1])
         # use linear approximation outside the clipped range
         loss = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
                                     2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
-    # else:
-        #     dw, x = inputs
-        #     y_terminal = self.model(inputs, training)
-        #     delta = y_terminal - self.bsde.g_tf(self.bsde.total_time, x[:, :, -1])
-        #     # use linear approximation outside the clipped range
-        #     loss = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
-        #                                 2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
-
-        # loss += 1000*(tf.maximum(self.model.y_init[0]-self.net_config.y_init_range[1],0)+tf.maximum(self.net_config.y_init_range[0]-self.model.y_init[0],0))
+        
         return loss
 
     def grad(self, inputs, training):
@@ -98,10 +85,8 @@ class NonsharedModel(tf.keras.Model):
                                   )
 
         self.subnet = [FeedForwardSubNet(config,bsde.dim) for _ in range(self.bsde.num_time_interval-1)]
-        #self.isXVA = True
 
     def call(self, inputs, training):
-        #if self.isXVA:
         dw, x, v_clean, coll = inputs
         time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
         all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
@@ -116,74 +101,33 @@ class NonsharedModel(tf.keras.Model):
         # terminal time
         y = y - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y, z,v_clean[:,:,-2],coll[:,:,-2]) + \
             tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
-        # else:
-        #     dw, x = inputs
-        #     time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
-        #     all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
-        #     y = all_one_vec * self.y_init
-        #     z = tf.matmul(all_one_vec, self.z_init)
-            
-        #     for t in range(0, self.bsde.num_time_interval-1):
-        #         y = y - self.bsde.delta_t * (
-        #             self.bsde.f_tf(time_stamp[t], x[:, :, t], y, z)
-        #         ) + tf.reduce_sum(z * dw[:, :, t], 1, keepdims=True)           
-        #         z = self.subnet[t](x[:, :, t + 1], training) / self.bsde.dim
-        #     # terminal time
-        #     y = y - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y, z) + \
-        #         tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
         return y         
 
     def predict_step(self, data):
         # this function returns value of y at each future time
-        #if self.isXVA: 
-            dw, x, v_clean, coll = data[0]
-            #tf.print(v_clean)
-            time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
-            all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
-            y = all_one_vec * self.y_init
-            z = tf.matmul(all_one_vec, self.z_init)        
-            
-            history = tf.TensorArray(self.net_config.dtype,size=self.bsde.num_time_interval+1)     
-            history = history.write(0,y)
-            
-            for t in range(0, self.bsde.num_time_interval-1):
-                y = y - self.bsde.delta_t * (
-                    self.bsde.f_tf(time_stamp[t], x[:, :, t], y, z,v_clean[:,:,t],coll[:,:,t])
-                ) + tf.reduce_sum(z * dw[:, :, t], 1, keepdims=True)
-                
-                history = history.write(t+1,y)
-                z = self.subnet[t](x[:, :, t + 1], False) / self.bsde.dim
-            # terminal time
-            y = y - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y, z,v_clean[:,:,-2], coll[:,:,-2]) + \
-                tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
+        dw, x, v_clean, coll = data[0]
+        time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
+        all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
+        y = all_one_vec * self.y_init
+        z = tf.matmul(all_one_vec, self.z_init)        
         
-            history = history.write(self.bsde.num_time_interval,y)
-            history = tf.transpose(history.stack(),perm=[1,2,0])
-            return dw,x,v_clean,coll,history      
-        #else:
-            # dw, x = data[0]
-            # time_stamp = np.arange(0, self.eqn_config.num_time_interval) * self.bsde.delta_t
-            # all_one_vec = tf.ones(shape=tf.stack([tf.shape(dw)[0], 1]), dtype=self.net_config.dtype)
-            # y = all_one_vec * self.y_init
-            # z = tf.matmul(all_one_vec, self.z_init)        
-            
-            # history = tf.TensorArray(self.net_config.dtype,size=self.bsde.num_time_interval+1)     
-            # history = history.write(0,y)
-            
-            # for t in range(0, self.bsde.num_time_interval-1):
-            #     y = y - self.bsde.delta_t * (
-            #         self.bsde.f_tf(time_stamp[t], x[:, :, t], y, z)
-            #     ) + tf.reduce_sum(z * dw[:, :, t], 1, keepdims=True)
-                
-            #     history = history.write(t+1,y)
-            #     z = self.subnet[t](x[:, :, t + 1], False) / self.bsde.dim
-            # # terminal time
-            # y = y - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y, z) + \
-            #     tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
+        history = tf.TensorArray(self.net_config.dtype,size=self.bsde.num_time_interval+1)     
+        history = history.write(0,y)
         
-            # history = history.write(self.bsde.num_time_interval,y)
-            # history = tf.transpose(history.stack(),perm=[1,2,0])
-            # return dw,x,history      
+        for t in range(0, self.bsde.num_time_interval-1):
+            y = y - self.bsde.delta_t * (
+                self.bsde.f_tf(time_stamp[t], x[:, :, t], y, z,v_clean[:,:,t],coll[:,:,t])
+            ) + tf.reduce_sum(z * dw[:, :, t], 1, keepdims=True)
+            
+            history = history.write(t+1,y)
+            z = self.subnet[t](x[:, :, t + 1], False) / self.bsde.dim
+        # terminal time
+        y = y - self.bsde.delta_t * self.bsde.f_tf(time_stamp[-1], x[:, :, -2], y, z,v_clean[:,:,-2], coll[:,:,-2]) + \
+            tf.reduce_sum(z * dw[:, :, -1], 1, keepdims=True)
+    
+        history = history.write(self.bsde.num_time_interval,y)
+        history = tf.transpose(history.stack(),perm=[1,2,0])
+        return dw,x,v_clean,coll,history      
 
     def simulate_path(self,num_sample):
         return self.predict(num_sample)[4]
