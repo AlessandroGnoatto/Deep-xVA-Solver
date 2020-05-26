@@ -77,6 +77,6 @@ if __name__ == "__main__":
     plt.show()
     fig.savefig(config.eqn_config.eqn_name + '.pdf',format = 'pdf')
     
-    df = pd.DataFrame(simulations)
+    df = pd.DataFrame(simulations[:,0,:])
     filepath = 'exposure' + config.eqn_config.eqn_name + '.xlsx'
     df.to_excel(filepath, index=False)

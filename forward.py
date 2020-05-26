@@ -55,7 +55,7 @@ if __name__ == "__main__":
     training_history = bsde_solver.train()  
    
     #Simulate the BSDE after training - MtM scenarios
-    simulations = bsde_solver.model.simulate(bsde.sample(P))
+    simulations = bsde_solver.model.simulate_path(bsde.sample(P))
     
     #estimated epected positive and negative exposure
     time_stamp = np.linspace(0,1,num_time_interval+1)
@@ -73,11 +73,11 @@ if __name__ == "__main__":
     ene_exact = x_init*rv.cdf(-d1) - strike*np.exp(-r)*rv.cdf(-d2)
 
     fig = plt.figure()
-    plt.plot(time_stamp,[0.0]+list(epe_exact),'b--',label='DEPE = exact solution',)
-    plt.plot(time_stamp,epe,'b',label='DEPE = deep solver approximation')
+    plt.plot(time_stamp,[0.0]+list(epe_exact),'b--',label='DEPE = exact solution')
+    plt.plot(time_stamp,np.transpose(epe),'b',label='DEPE = deep solver approximation')
 
-    plt.plot(time_stamp,[0.0]+list(ene_exact),'r--',label='DNPE = exact solution',)
-    plt.plot(time_stamp,ene,'r',label='DNPE = deep solver approximation')
+    plt.plot(time_stamp,[0.0]+list(ene_exact),'r--',label='DNPE = exact solution')
+    plt.plot(time_stamp,np.transpose(ene),'r',label='DNPE = deep solver approximation')
 
     plt.xlabel('t')
     plt.legend()
@@ -85,6 +85,6 @@ if __name__ == "__main__":
     plt.show()
     fig.savefig(config.eqn_config.eqn_name + '.pdf',format = 'pdf')
     
-    df = pd.DataFrame(simulations)
+    df = pd.DataFrame(simulations[:,0,:])
     filepath = 'exposure' + config.eqn_config.eqn_name + '.xlsx'
     df.to_excel(filepath, index=False)
