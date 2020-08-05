@@ -23,7 +23,7 @@ if __name__ == "__main__":
     config = {
                 "eqn_config": {
                     "_comment": "a forward contract",
-                    "eqn_name": "ForwardContract",
+                    "eqn_name": "PricingForward",
                     "total_time": total_time,
                     "dim": dim,
                     "num_time_interval": num_time_interval,

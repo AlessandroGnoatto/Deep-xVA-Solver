@@ -47,12 +47,12 @@ class BasketOption(Equation):
     def __init__(self, eqn_config):
         super(BasketOption, self).__init__(eqn_config)
         self.strike = eqn_config.strike
-        self.x_init = np.ones(self.dim) * eqn_config.x_init
-        self.sigma = eqn_config.sigma
-        self.r = eqn_config.r
-        self.useExplict = False #whether to use explict formula to evaluate dyanamics of x
+        self.x_init = np.ones(self.dim) * eqn_config.x_init  # initial value of x, the underlying
+        self.sigma = eqn_config.sigma    # volatility 
+        self.rate = eqn_config.r    # risk-free rate 
+        self.useExplict = True #whether to use explict formula to evaluate dyanamics of x
 
-    def sample(self, num_sample):      
+    def sample(self, num_sample,use_gpu=False):
         
         dw_sample = normal.rvs(size=[num_sample,     
                                      self.dim,
@@ -65,22 +65,21 @@ class BasketOption(Equation):
         x_sample[:, :, 0] = np.ones([num_sample, self.dim]) * self.x_init  
 
         if self.useExplict: #use analytic solution of linear SDE
-            factor = np.exp((self.r-(self.sigma**2)/2)*self.delta_t)
+            factor = np.exp((self.rate-(self.sigma**2)/2)*self.delta_t)
             for i in range(self.num_time_interval):   
                 x_sample[:, :, i + 1] = (factor * np.exp(self.sigma * dw_sample[:, :, i])) * x_sample[:, :, i]
         else:   #use Euler-Maruyama scheme
             for i in range(self.num_time_interval):
-         	    x_sample[:, :, i + 1] = (1 + self.r * self.delta_t) * x_sample[:, :, i] + (self.sigma * x_sample[:, :, i] * dw_sample[:, :, i])           
-      
+         	    x_sample[:, :, i + 1] = (1 + self.rate * self.delta_t) * x_sample[:, :, i] + (self.sigma * x_sample[:, :, i] * dw_sample[:, :, i])       
         
-        return dw_sample, x_sample   
+        return dw_sample, x_sample 
 
     def f_tf(self, t, x, y, z):
-        return -self.r * y
+        return -self.rate * y
 
     def g_tf(self, t, x):
         temp = tf.reduce_sum(x, 1,keepdims=True)
-        return tf.maximum(temp - self.dim * self.strike, 0)
+        return tf.maximum(temp - self.strike, 0)
 
 class CallOption(Equation):
     def __init__(self, eqn_config):
